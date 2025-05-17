@@ -4,6 +4,7 @@ import {create} from 'zustand';
 
 export const useApp = create<any>((set)=>({
     user: null,
+    opponent: null,
     signup: async (data: any, router: any) => {
         try {
             const res = await axios.post("http://localhost:4000/api/user/signup", data, {
@@ -33,6 +34,16 @@ export const useApp = create<any>((set)=>({
             }
         } catch (error) {
             toast.error("Failed to login")
+            set({user: null})
+        }
+    },
+    fetchUser: async () => {
+        try {
+            const res = await axios.get("http://localhost:4000/api/user/get-user", {withCredentials: true});
+            if(res.status === 200){
+                set({user: res.data})
+            }
+        } catch (error) {
             set({user: null})
         }
     }

@@ -1,3 +1,6 @@
+/* globals.css */
+@import url('https://fonts.googleapis.com/css2?family=Underdog&display=swap');
+
 @import "tailwindcss";
 @import "tw-animate-css";
 
