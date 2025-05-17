@@ -4,7 +4,12 @@ import {create} from 'zustand';
 
 export const useApp = create<any>((set)=>({
     user: null,
-    opponent: null,
+    socket: null,
+    setSocket: (socket:any ) => {
+        if(socket){
+            set({socket: socket})
+        }
+    },
     signup: async (data: any, router: any) => {
         try {
             const res = await axios.post("http://localhost:4000/api/user/signup", data, {
