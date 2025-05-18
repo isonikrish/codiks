@@ -1,7 +1,7 @@
 "use client";
 
-import { getSocket } from "@/lib/socket";
 import React, { useEffect, useState } from "react";
+ // Adjust import path
 import {
   Card,
   CardContent,
@@ -12,43 +12,46 @@ import {
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useRouter } from "next/navigation"; // ⬅️ Import router
-import { useApp } from "@/stores/useApp";
-import { io } from "socket.io-client";
+import { useRouter } from "next/navigation";
+import { useSocket } from "@/stores/SocketProvider";
+
 function WaitingArea() {
+  const socket = useSocket();
   const [socketId, setSocketId] = useState<string | null>(null);
   const [opponent, setOpponent] = useState<string | null>(null);
   const router = useRouter();
-  const { socket, setSocket } = useApp();
+
   useEffect(() => {
-    const sock = getSocket()
-    console.log(sock)
-    setSocket(sock);
+    if (!socket) return;
+    //@ts-ignore
+    setSocketId(socket.id);
 
-    sock.on("connect", () => {
-      //@ts-ignore
-      setSocketId(sock.id);
-      sock.emit("waiting-area");
-    });
+    socket.emit("waiting-area");
 
-    sock.on("found-opponent", (data: { opponentSocketId: string }) => {
+    socket.on("found-opponent", (data: { opponentSocketId: string }) => {
       setOpponent(data.opponentSocketId);
     });
 
-    sock.on("battle-started", (data: { battleId: string }) => {
-      router.push(`/battle/${data.battleId}?playerSocketId=${sock.id}`);
+    socket.on("battle-started", (data: { battleId: string }) => {
+      router.push(`/battle/${data.battleId}?playerSocketId=${socket.id}`);
     });
 
+    // Cleanup listeners on unmount
     return () => {
-      sock.disconnect();
+      socket.off("found-opponent");
+      socket.off("battle-started");
     };
-  }, [router]);
+  }, [socket, router]);
 
   const handleStartGame = () => {
     if (opponent && socket) {
-      socket.emit("start-battle", opponent); // ⬅️ Start the battle
+      socket.emit("start-battle", opponent);
     }
   };
+
+  if (!socket) {
+    return <p>Connecting to socket...</p>;
+  }
 
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-muted p-6">

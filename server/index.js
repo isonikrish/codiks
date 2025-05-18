@@ -95,44 +95,34 @@ io.on("connection", (socket) => {
     const opponentSocket = io.sockets.sockets.get(opponentId);
     if (opponentSocket)
       opponentSocket.emit("battle-started", { battleId: battle.id });
-
-    console.log("Active Users:", activeUsers);
-    console.log("Active Battles:", Array.from(activeBattles.keys()));
   });
 
-  // Handle code submission from frontend
-  socket.on("end-battle", ({ battleId, passCount }) => {
-    const battle = activeBattles.get(battleId);
-    if (!battle || battle.status === "finished") return;
+  socket.on("submit-code", (battleId, socketId, testResults) => {
+  const battle = activeBattles.get(battleId);
+  if (!battle) {
+    socket.emit("error", { message: "Battle not found." });
+    return;
+  }
+  console.log({battleId, socketId, testResults})
+  const passCount = testResults.filter((t) => t.passed).length;
+  battle.submitCode(socketId, passCount);
 
-    battle.submitResult(socket.id, passCount);
+  // If both players have submitted and battle is finished, emit results
+  if (battle.status === "finished") {
+    const opponentId = battle.player1 === socketId ? battle.player2 : battle.player1;
+    const opponentSocket = io.sockets.sockets.get(opponentId);
 
-    if (battle.isReadyToEnd()) {
-      const winner = battle.evaluateWinner();
-      battle.end(winner);
+    const resultPayload = {
+      winner: battle.winner,
+      player1PassCount: battle.player1PassCount,
+      player2PassCount: battle.player2PassCount,
+    };
 
-      // Mark players as no longer in battle
-      const user1 = activeUsers.find((u) => u.socketId === battle.player1);
-      const user2 = activeUsers.find((u) => u.socketId === battle.player2);
-      if (user1) user1.inBattle = false;
-      if (user2) user2.inBattle = false;
+    socket.emit("battle-ended", resultPayload);
+    if (opponentSocket) opponentSocket.emit("battle-ended", resultPayload);
+  }
+});
 
-      const player1Socket = io.sockets.sockets.get(battle.player1);
-      const player2Socket = io.sockets.sockets.get(battle.player2);
-
-      const result = {
-        battleId: battle.id,
-        player1: battle.player1,
-        player2: battle.player2,
-        player1Score: battle.submissions[battle.player1],
-        player2Score: battle.submissions[battle.player2],
-        winner,
-      };
-
-      if (player1Socket) player1Socket.emit("battle-ended", result);
-      if (player2Socket) player2Socket.emit("battle-ended", result);
-    }
-  });
 
   // Clean up on disconnect
   socket.on("disconnect", () => {

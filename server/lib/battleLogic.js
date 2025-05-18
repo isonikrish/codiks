@@ -4,7 +4,9 @@ export class Battle {
   player2;
   winner = null;
   status = "waiting";
-  submissions = {}; // <--- Add this
+
+  player1PassCount = null;
+  player2PassCount = null;
 
   constructor(player1, player2) {
     this.id = `${player1}-${player2}-${Date.now()}`;
@@ -14,6 +16,25 @@ export class Battle {
 
   start() {
     this.status = "in-progress";
+  }
+
+  submitCode(socketId, passCount) {
+    if (socketId === this.player1) {
+      this.player1PassCount = passCount;
+    } else if (socketId === this.player2) {
+      this.player2PassCount = passCount;
+    }
+
+    // If both players submitted, decide the winner
+    if (this.player1PassCount !== null && this.player2PassCount !== null) {
+      if (this.player1PassCount > this.player2PassCount) {
+        this.end(this.player1);
+      } else if (this.player2PassCount > this.player1PassCount) {
+        this.end(this.player2);
+      } else {
+        this.end("draw"); // Or null if you prefer
+      }
+    }
   }
 
   end(winner) {
@@ -28,25 +49,8 @@ export class Battle {
       player2: this.player2,
       winner: this.winner,
       status: this.status,
+      player1PassCount: this.player1PassCount,
+      player2PassCount: this.player2PassCount,
     };
-  }
-
-  submitResult(playerId, passCount) {
-    this.submissions[playerId] = passCount;
-  }
-
-  isReadyToEnd() {
-    return (
-      this.submissions[this.player1] !== undefined &&
-      this.submissions[this.player2] !== undefined
-    );
-  }
-
-  evaluateWinner() {
-    const p1 = this.submissions[this.player1];
-    const p2 = this.submissions[this.player2];
-    if (p1 > p2) return this.player1;
-    else if (p2 > p1) return this.player2;
-    else return "tie";
   }
 }

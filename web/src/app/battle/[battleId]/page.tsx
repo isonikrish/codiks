@@ -3,32 +3,53 @@
 import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { problem } from "@/lib/problem";
-import { getSocket } from "@/lib/socket";
 import Editor from "@monaco-editor/react";
 import { Button } from "@/components/ui/button";
 //@ts-ignore
 import * as vm from "vm-browserify";
+import { useSocket } from "@/stores/SocketProvider";
 
 export default function BattlePage() {
   const params = useParams();
   const battleId = params.battleId as string;
-  const socket = getSocket();
   const searchParams = useSearchParams();
-
   const [code, setCode] = useState("");
-  const [winnerMessage, setWinnerMessage] = useState("");
   const [testResults, setTestResults] = useState<
     { passed: boolean; expected: any; got: any }[]
   >([]);
+  const [battleResult, setBattleResult] = useState<{
+    winner: string | null;
+    player1PassCount: number;
+    player2PassCount: number;
+  } | null>(null);
 
-  // Extract playerSocketId from search params (must be passed in URL)
   const playerSocketId = searchParams.get("playerSocketId");
+  const socket = useSocket();
+
+  // Listen for battle ended event
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleBattleEnded = (result: {
+      winner: string;
+      player1PassCount: number;
+      player2PassCount: number;
+    }) => {
+      setBattleResult(result);
+    };
+
+    socket.on("battle-ended", handleBattleEnded);
+
+    return () => {
+      socket.off("battle-ended", handleBattleEnded);
+    };
+  }, [socket]);
 
   // Handle editor changes
   const handleEditorChange = (value?: string) => {
     if (value !== undefined) setCode(value);
   };
-
+console.log(battleResult)
   // Run test cases locally in browser using vm-browserify
   const runTestCases = () => {
     if (!code) return [];
@@ -57,39 +78,18 @@ export default function BattlePage() {
     }
   };
 
-  // Submit code and test results to backend via socket
-  const handleEndBattle = () => {
-    const results = runTestCases();
-    const passCount = results.filter((r) => r.passed).length;
-
-    socket.emit("end-battle", {
-      battleId,
-      passCount,
-      code,
-    });
+  const handleSubmit = () => {
+    const results = runTestCases(); // Reuse the local runner
+    if (!results.length) return;
+    if (socket && battleId && playerSocketId) {
+      socket.emit("submit-code", battleId, playerSocketId, results);
+    }
   };
 
-  useEffect(() => {
-    // Listen to battle-ended event
-    socket.on("battle-ended", (data) => {
-      console.log("battle-ended event data:", data); // ADD THIS
+  if (!socket) {
+    return <p>Connecting to socket...</p>;
+  }
 
-      if (!playerSocketId) return;
-
-      if (!data.winner) {
-        setWinnerMessage("🤝 It's a draw!");
-      } else if (data.winner === playerSocketId) {
-        setWinnerMessage("🏆 You won!");
-      } else {
-        setWinnerMessage("❌ You lost!");
-      }
-    });
-
-    return () => {
-      socket.off("battle-ended");
-    };
-  }, [socket, playerSocketId]);
-  console.log(winnerMessage)
   return (
     <div className="h-screen w-screen p-4 flex flex-col gap-4 bg-black text-white">
       <h1 className="text-2xl font-semibold">Battle ID: {battleId}</h1>
@@ -119,11 +119,18 @@ export default function BattlePage() {
           options={{
             minimap: { enabled: false },
             fontSize: 16,
+            readOnly: battleResult !== null, // disable editing after battle ends
           }}
         />
       </div>
-
-      <Button onClick={handleEndBattle}>Submit Code</Button>
+      <div className="flex gap-3 justify-end">
+        <Button variant={"outline"} onClick={runTestCases} disabled={!!battleResult}>
+          Run Code
+        </Button>
+        <Button onClick={handleSubmit} disabled={!!battleResult}>
+          Submit
+        </Button>
+      </div>
 
       {testResults.length > 0 && (
         <div className="mt-4 p-4 bg-gray-900 rounded-lg max-h-60 overflow-y-auto">
@@ -132,20 +139,34 @@ export default function BattlePage() {
             {testResults.map((res, idx) => (
               <li
                 key={idx}
-                className={`text-sm ${res.passed ? "text-green-400" : "text-red-400"
-                  }`}
+                className={`text-sm ${res.passed ? "text-green-400" : "text-red-400"}`}
               >
-                Test #{idx + 1}: {res.passed ? "✅ Passed" : "❌ Failed"} |{" "}
-                Expected: {String(res.expected)}, Got: {String(res.got)}
+                Test #{idx + 1}: {res.passed ? "✅ Passed" : "❌ Failed"} | Expected:{" "}
+                {String(res.expected)}, Got: {String(res.got)}
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      {winnerMessage && (
-        <div className="mt-4 text-2xl font-bold text-center text-yellow-400">
-          {winnerMessage}
+      {battleResult && (
+        <div className="mt-6 p-4 rounded-lg bg-green-800 text-white font-bold text-center">
+          {battleResult.winner === playerSocketId ? (
+            <>🎉 You won! 🎉</>
+          ) : (
+            <>😞 You lost! 😞</>
+          )}
+          <p className="mt-2">
+            Your Score:{" "}
+            {battleResult.winner === playerSocketId
+              ? battleResult.player1PassCount
+              : battleResult.player2PassCount}
+            <br />
+            Opponent's Score:{" "}
+            {battleResult.winner === playerSocketId
+              ? battleResult.player2PassCount
+              : battleResult.player1PassCount}
+          </p>
         </div>
       )}
     </div>

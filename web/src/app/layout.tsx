@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import FetchUser from "@/components/FetchUser";
 import Navbar from "@/components/Navbar";
+import { SocketProvider } from "@/stores/SocketProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,9 +31,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <SocketProvider>
         <FetchUser />
         <Navbar />
-        {children}
+        {children}</SocketProvider>
         <Toaster position="top-center"/>
       </body>
     </html>
